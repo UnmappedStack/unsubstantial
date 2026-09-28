@@ -175,7 +175,7 @@ void __attribute__((noreturn)) process_switchNextThread();
  * This will yield current execution to the next available task, but will return when
  * this process is loaded by @c process_switchNextThread
  * 
- * @param reschedule Whether to readd the process back to the queue, meaning it can return whenever and isn't waiting on something
+ * @param reschedule Whether to read the process back to the queue, meaning it can return whenever and isn't waiting on something
  */
 void process_yield(uint8_t reschedule);
 

@@ -142,6 +142,7 @@ typedef struct vmm_fault_information {
 
 extern vmm_context_t *vmm_kernel_context;
 extern vmm_space_t *vmm_kernel_space;
+extern vmm_to_swap_range_t *to_swap_head;
 
 /**** FUNCTIONS ****/
 

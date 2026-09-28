@@ -37,7 +37,7 @@ static vmm_context_t __vmm_kernel_context = {
 
 // For a doubly linked list of regions which need to be swapped out but aren't
 // yet. This is global for all memory spaces.
-static vmm_to_swap_range_t *to_swap_head = NULL;
+vmm_to_swap_range_t *to_swap_head = NULL;
 static vmm_to_swap_range_t *to_swap_tail = NULL;
 static slab_cache_t *to_swap_cache = NULL;
 
@@ -563,6 +563,13 @@ void vmm_destroyContext(vmm_context_t *ctx) {
  * @param range The memory range to remove
  */
 void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range) {
+    // Slight optimisation: only user memory is swapped out, so no point in
+    // searching if its in kernel memory
+    if (range->start >= vmm_kernel_context->space->start) return;
+
+    if (to_swap_tail)
+        to_swap_tail->next = NULL;
+
     // This is kind of bad and slow (linear search!). It didn't have any *noticable*
     // performance damages in my testing but said testing was not really any
     // thorough kind of benchmark so its still probably pretty bad.
@@ -579,7 +586,7 @@ void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range) {
         goto remove;
     }
 
-    // Not in the list. We don't need to panic, this is normal.
+    // Not in the list. We don't need to panic or return an error, this is normal.
     return;
 
 remove:
@@ -638,8 +645,9 @@ void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range) {
  */
 void vmm_insertToSwapRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
     if (!to_swap_cache) {
-        to_swap_cache = slab_createCache("to_swap", SA_FAST, sizeof(vmm_to_swap_range_t),
+        to_swap_cache = slab_createCache("to-swap", SA_FAST, sizeof(vmm_to_swap_range_t),
                                          sizeof(vmm_to_swap_range_t), NULL, NULL);
+        assert(to_swap_cache && "failed to create to-swap cache");
     }
     vmm_to_swap_range_t *to_swap = slab_allocate(to_swap_cache);
     to_swap->range = range;
@@ -673,12 +681,12 @@ void vmm_swapOutSomeMemory(vmm_space_t *sp) {
         vmm_removeFromResidentList(sp, range);
         sp->num_resident_pages -= PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE;
        
-//        vmm_insertToSwapRegion(sp, range);
-
-        LOG(INFO, "SWAP OUT %u PAGES AT %p, %u LEFT\n\n",
+        LOG(INFO, "SWAP OUT %u PAGES AT %p, %u LEFT\n",
                 PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE,
                 range->start,
                 sp->num_resident_pages);
+        
+        vmm_insertToSwapRegion(sp, range);
     }
 }
 
@@ -708,6 +716,9 @@ void vmm_insertResidentRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @param range The virtual memory region to mark
  */
 void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range) {
+    // Only swap userspace memory
+    if (sp->start >= vmm_kernel_context->space->start) return;
+    
     // A range can't be resident if its either shared or backed.
     if (range->vmm_flags & VM_FLAG_SHARED ||
         range->vmm_flags & VM_FLAG_FILE   ||

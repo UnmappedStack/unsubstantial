@@ -15,6 +15,8 @@
 #include <kernel/mm/memleak.h>
 #include <kernel/debug.h>
 #include <kernel/processor_data.h>
+#include <kernel/task/thread.h>
+#include <kernel/task/sched/sched.h>
 #include <string.h>
 
 /* Log method */

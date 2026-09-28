@@ -30,6 +30,7 @@
 
 // Memory
 #include <kernel/mm/vmm.h>
+#include <kernel/mm/pager.h>
 
 // VFS
 #include <kernel/fs/vfs_new.h>
@@ -346,6 +347,12 @@ void kmain() {
 
     // Run kernel late
     INIT_RUN_PHASE(PHASE_KERN_LATE);
+
+    // Start the pager thread
+    process_t *pager;
+    if (!(pager=process_createKernel("Pager", PROCESS_KERNEL, (void*)pager_threadEntry, NULL)))
+        LOG(WARN, "Pager thread could not be initialised, will run without page swapping.\n");
+    sched_insert(pager->main_thread);
 
     // Alright, we are done booting, print post-boot stats
     kernel_statistics();
