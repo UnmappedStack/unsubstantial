@@ -550,3 +550,96 @@ void vmm_destroyContext(vmm_context_t *ctx) {
 
     slab_free(vmm_context_cache, ctx);
 }
+
+/**
+ * @brief Removes a region from the resident page list if its in there
+ * @param sp The memory space it may be in
+ * @param range The memory region
+ */
+void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range) {
+    if (!range->next_resident && !range->prev_resident && sp->resident != range) {
+        // It's not in the resident list. TODO: this would probably
+        // be less finnicky if we just had a resident flag.
+        return;
+    }
+
+    vmm_memory_range_t *prev = range->prev_resident;
+    vmm_memory_range_t *next = range->next_resident;
+    if (prev) {
+        prev->next_resident = next;
+    } else {
+        sp->resident = next;
+    }
+
+    if (next) {
+        next->prev_resident = prev;
+    } else {
+        sp->resident_last = prev;
+    }
+
+    range->next_resident = range->prev_resident = NULL;
+}
+
+/**
+ * @brief Swaps out the least recently inserted memory ranges of a vm space
+ * @param sp The virtual memory space to swap out of
+ */
+void vmm_swapOutSomeMemory(vmm_space_t *sp) {
+    while (sp->num_resident_pages > VMM_MAX_RESIDENT_PAGES) {
+        // Take the earliest inserted range to swap out
+        vmm_memory_range_t *range = sp->resident;
+        assert(range);
+
+        // Remove it from the list
+        vmm_removeFromResidentList(sp, range);
+        sp->num_resident_pages -= PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE;
+        
+        LOG(INFO, "SWAP OUT %u PAGES AT %p, %u LEFT\n\n",
+                PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE,
+                range->start,
+                sp->num_resident_pages);
+    }
+}
+
+/**
+ * @brief Inserts a region into the resident list (unconditionally!)
+ * @param sp The vmm space
+ * @param range The virtual memory region to insert
+ */
+void vmm_insertResidentRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
+    if (!sp->resident) {
+        sp->resident = range;
+        sp->resident_last = range;
+        range->next_resident = range->prev_resident = NULL;
+        return;
+    }
+   
+    // insert it at the end
+    vmm_memory_range_t *last = sp->resident_last;
+    last->next_resident = range;
+    range->prev_resident = last;
+    sp->resident_last = range;
+}
+
+/**
+ * @brief Marks a region as resident and inserts it into the resident list
+ * @param sp The vmm space
+ * @param range The virtual memory region to mark
+ */
+void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range) {
+    // A range can't be resident if its either shared or backed.
+    if (range->vmm_flags & VM_FLAG_SHARED ||
+        range->vmm_flags & VM_FLAG_FILE   ||
+        range->vmm_flags & VM_FLAG_DEVICE) return;
+
+
+    vmm_insertResidentRegion(sp, range);
+
+    sp->num_resident_pages += PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE;
+    assert(sp->resident);
+
+    // If there's too much memory resident, we gotta swap some out!
+    if (sp->num_resident_pages > VMM_MAX_RESIDENT_PAGES) {
+        vmm_swapOutSomeMemory(sp);
+    }
+}

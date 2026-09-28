@@ -20,6 +20,7 @@
 #include <kernel/mm/slab.h>
 #include <kernel/debug.h>
 #include <kernel/init.h>
+#include <limits.h>
 #include <string.h>
 
 /* Caches */

@@ -130,6 +130,8 @@ void vmm_insertRange(vmm_space_t *space, vmm_memory_range_t *range) {
     r->next = range;
     range->next = NULL;
     range->prev = r;
+
+    vmm_markRegionResident(space, range);
 }
 
 /**
@@ -256,6 +258,9 @@ void vmm_freePages(vmm_space_t *space, vmm_memory_range_t *range, uintptr_t offs
  * @param range The range to destroy
  */
 void vmm_destroyRange(vmm_space_t *space, vmm_memory_range_t *range) {
+    // Remove it if its resident
+    vmm_removeFromResidentList(space, range);
+
     if (range->next) range->next->prev = range->prev;
     if (range->prev) range->prev->next = range->next;
     if (range == space->range) space->range = range->next;

@@ -62,6 +62,10 @@
 #define VMM_PTR_USER                0x01    // Usermode or kernel pointer (STRICT: Only usermode pointer)
 #define VMM_PTR_STRICT              0x02    // Strict pointer validation
 
+// This might be worth playing around with to find an optimal value. This value
+// is uhh... how do I put it... pulled straight outta my ass
+#define VMM_MAX_RESIDENT_PAGES 2000
+
 /**** TYPES ****/
 
 typedef uint64_t vmm_flags_t;
@@ -81,6 +85,12 @@ typedef struct vmm_memory_range {
     vmm_flags_t vmm_flags;
     mmu_flags_t mmu_flags;
     vmm_file_t file;
+    
+    // It's also stored in a separate linked list of resident regions.
+    // We will only even be in this list for the space if we are actively resident,
+    // that is, not swapped out to disk or whatever the pager is.
+    struct vmm_memory_range *next_resident;
+    struct vmm_memory_range *prev_resident;
 } vmm_memory_range_t;
 
 typedef struct vmm_metrics_t {
@@ -98,6 +108,11 @@ typedef struct vmm_space {
     vmm_memory_range_t *range;
     mutex_t *mut;
     vmm_metrics_t metrics;
+    
+    vmm_memory_range_t *resident; // like `range`, but only those that are
+                                  // resident in memory, not swapped out
+    vmm_memory_range_t *resident_last; // the last element of the list `resident`
+    uintptr_t num_resident_pages;
 } vmm_space_t;
 
 typedef struct vmm_context {
@@ -310,4 +325,17 @@ static inline mmu_flags_t vmm_toMMU(int prot) {
  */
 int coredump_process(struct thread *thr, void *regs);
 
+/**
+ * @brief Marks a region as resident and inserts it into the resident list
+ * @param sp The vmm space
+ * @param range The virtual memory region to mark
+ */
+void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range);
+
+/**
+ * @brief Removes a region from the resident page list if its in there
+ * @param sp The memory space it may be in
+ * @param range The memory region
+ */
+void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range);
 #endif

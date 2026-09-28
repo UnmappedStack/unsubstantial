@@ -64,4 +64,4 @@ headerlog:
 
 qemu:
 	$(MAKE) headerlog header="Launching QEMU..."
-	qemu-system-x86_64 -cdrom build-output/hexahedron.iso
+	qemu-system-x86_64 -cdrom build-output/hexahedron.iso -accel kvm -m 1G -smp 8 -serial stdio
