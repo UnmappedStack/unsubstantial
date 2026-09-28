@@ -35,6 +35,12 @@ static vmm_context_t __vmm_kernel_context = {
     .space = &__vmm_kernel_space,
 };
 
+// For a doubly linked list of regions which need to be swapped out but aren't
+// yet. This is global for all memory spaces.
+static vmm_to_swap_range_t *to_swap_head = NULL;
+static vmm_to_swap_range_t *to_swap_tail = NULL;
+static slab_cache_t *to_swap_cache = NULL;
+
 /* Kernel context + space */
 vmm_context_t *vmm_kernel_context = &__vmm_kernel_context;
 vmm_space_t *vmm_kernel_space = &__vmm_kernel_space;
@@ -552,6 +558,49 @@ void vmm_destroyContext(vmm_context_t *ctx) {
 }
 
 /**
+ * @brief Removes a region from the to-swap list
+ * @param sp The memory space it belongs to
+ * @param range The memory range to remove
+ */
+void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range) {
+    // This is kind of bad and slow (linear search!). It didn't have any *noticable*
+    // performance damages in my testing but said testing was not really any
+    // thorough kind of benchmark so its still probably pretty bad.
+    // TODO: fix this (!!)
+    vmm_to_swap_range_t *this_range;
+    for (this_range = to_swap_head;
+            this_range; this_range = this_range->next) {
+
+        if (this_range->space != sp || this_range->range->start != range->start) {
+            continue;
+        }
+
+        // Found it, remove
+        goto remove;
+    }
+
+    // Not in the list. We don't need to panic, this is normal.
+    return;
+
+remove:
+    vmm_to_swap_range_t *prev = this_range->prev;
+    vmm_to_swap_range_t *next = this_range->next;
+    if (prev) {
+        prev->next = next;
+    } else {
+        to_swap_head = next;
+    }
+
+    if (next) {
+        next->prev = prev;
+    } else {
+        to_swap_tail = prev;
+    }
+
+    slab_free(to_swap_cache, this_range);
+}
+
+/**
  * @brief Removes a region from the resident page list if its in there
  * @param sp The memory space it may be in
  * @param range The memory region
@@ -560,6 +609,8 @@ void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range) {
     if (!range->next_resident && !range->prev_resident && sp->resident != range) {
         // It's not in the resident list. TODO: this would probably
         // be less finnicky if we just had a resident flag.
+        // We still need to remove it from the to-swap list in case its there.
+        vmm_removeFromToSwapList(sp, range);
         return;
     }
 
@@ -581,6 +632,34 @@ void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range) {
 }
 
 /**
+ * @brief Inserts a region into the to-swap list
+ * @param sp The vmm space
+ * @param range The virtual memory region to insert
+ */
+void vmm_insertToSwapRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
+    if (!to_swap_cache) {
+        to_swap_cache = slab_createCache("to_swap", SA_FAST, sizeof(vmm_to_swap_range_t),
+                                         sizeof(vmm_to_swap_range_t), NULL, NULL);
+    }
+    vmm_to_swap_range_t *to_swap = slab_allocate(to_swap_cache);
+    to_swap->range = range;
+    to_swap->space = sp;
+
+    if (!to_swap_head) {
+        to_swap_head = to_swap;
+        to_swap_tail = to_swap;
+        to_swap->next = to_swap->prev = NULL;
+        return;
+    }
+   
+    // insert it at the end
+    vmm_to_swap_range_t *last = to_swap_tail;
+    last->next = to_swap;
+    to_swap->prev = last;
+    to_swap_tail = to_swap;
+}
+
+/**
  * @brief Swaps out the least recently inserted memory ranges of a vm space
  * @param sp The virtual memory space to swap out of
  */
@@ -593,7 +672,9 @@ void vmm_swapOutSomeMemory(vmm_space_t *sp) {
         // Remove it from the list
         vmm_removeFromResidentList(sp, range);
         sp->num_resident_pages -= PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE;
-        
+       
+//        vmm_insertToSwapRegion(sp, range);
+
         LOG(INFO, "SWAP OUT %u PAGES AT %p, %u LEFT\n\n",
                 PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE,
                 range->start,

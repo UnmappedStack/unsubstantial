@@ -115,6 +115,18 @@ typedef struct vmm_space {
     uintptr_t num_resident_pages;
 } vmm_space_t;
 
+// We need to store regions linked list of regions that
+// need to be swapped out by a pager thread, but are not yet actually on
+// disk thus cannot be freed. This one, though, is not per-space, rather
+// global.
+typedef struct vmm_to_swap_range {
+    struct vmm_to_swap_range *next;
+    struct vmm_to_swap_range *prev;
+
+    vmm_memory_range_t *range;
+    vmm_space_t *space;
+} vmm_to_swap_range_t;
+
 typedef struct vmm_context {
     vmm_space_t *space;                 // Default target VMM space
     mmu_dir_t *dir;                     // Directory

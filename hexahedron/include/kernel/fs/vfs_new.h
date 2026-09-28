@@ -81,10 +81,6 @@
 /* VFS inode states */
 #define INODE_STATE_NEW             0x1
 
-/* UnmappedStack's amazing contribution which fixes ~~ethereal~~ unsubstantial
- * (this will be PR'd, and ofc merged because sassydallas would not dare not merge
- * it. Otherwise he will be banned from the nest! */
-
 /**** TYPES ****/
 
 struct vfs_file;
