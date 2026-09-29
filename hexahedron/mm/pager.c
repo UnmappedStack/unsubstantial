@@ -36,8 +36,6 @@ static size_t swapfile_offset_upto = 0;
  */
 void pager_swapOutRange(vmm_to_swap_range_t *range) {
     uintptr_t range_bytes = range->range->end - range->range->start;
-    LOG(INFO, "space is at %p, start is %p, end is %p, range is %p\n",
-            range->space, range->space->start, range->space->end, range->space->range);
     vmm_context_t *context = vmm_spaceToContext(range->space);
     assert(context->space == range->space && "this will prolly fail idek");
     if (swapfile_offset_upto + range_bytes >= FIXED_MAX_SWAP_SIZE) {
@@ -60,6 +58,7 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     // Save it to wherever its being stored (temporarily just some place in
     // memory for testing, should be disk later)
     memcpy(&swap_target[swapfile_offset_upto], buf, range_bytes);
+    LOG(DEBUG, "SWAP REGION %p: swap addr %p to offset in swapfile %p\n", range->range, range->range->start, swapfile_offset_upto);
     swapfile_offset_upto += range_bytes;
     vmm_unmap(buf, range_bytes);
 
@@ -69,10 +68,9 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     // Free the physical memory (woah the whole purpose of this thing :nekocatwoah:)
     for (uintptr_t addr = range->range->start; addr < range->range->end; addr += PAGE_SIZE) {
         uint64_t new_flags = arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT;
-        LOG(INFO, "new flags are %p, context->dir = %p, addr = %p\n", new_flags, context->dir, addr);
         arch_mmu_setflags(context->dir, addr, new_flags);
         uintptr_t phys = arch_mmu_physical(context->dir, addr);
-        if (phys) pmm_freePage(phys);
+        //if (phys) pmm_freePage(phys);
     }
 }
 
@@ -83,17 +81,29 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
  * @returns VMM_FAULT_RESOLVED on success and VMM_FAULT_UNRESOLVED on failure
  */
 int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
+    LOG(WARN, "range -> %p, range-> is_swapped_out = %u, start = %p\n", range, range->swapped_out, range->start);
     // For now we'll assume its fully swapped out and NOT in the to-be-swapped list
     // TODO: these flags should be checked, not assumed with full perms!
     uintptr_t range_bytes = range->end - range->start;
     range->mmu_flags |= MMU_FLAG_PRESENT;
 
-    uint8_t *new_mem = vmm_map((void*)range->start, range_bytes, VM_FLAG_ALLOC, range->mmu_flags);
+    uintptr_t new_phys = pmm_allocatePages(PAGE_ALIGN_UP(range_bytes)/PAGE_SIZE, ZONE_DEFAULT);
+    if (!new_phys) {
+        LOG(WARN, "failed to allocate memory to swap region back in, likely oom\n");
+        return VMM_FAULT_UNRESOLVED;
+    }
 
-    if (!new_mem) return VMM_FAULT_UNRESOLVED; // probably oom
+    vmm_context_t *ctx = vmm_spaceToContext(sp);
+    for (uintptr_t offset = 0; offset < range_bytes; offset += PAGE_SIZE) {
+        arch_mmu_map(ctx->dir, range->start + offset, new_phys + offset, range->mmu_flags);
+    }
 
-    memcpy(new_mem, &swap_target[range->swap_loc_offset], range_bytes);
+    memcpy((void*)range->start, &swap_target[range->swap_loc_offset], range_bytes);
+    LOG(DEBUG, "deswap into %p from %p (offset %p)\n",
+            range->start, &swap_target[range->swap_loc_offset], range->swap_loc_offset);
     range->to_be_swapped_out = range->swapped_out = false;
+
+    arch_mmu_invalidate_range(range->start, range->end);
 
     // TODO: re-insert it into the resident page list, otherwise it can't be swapped out again
     return VMM_FAULT_RESOLVED;

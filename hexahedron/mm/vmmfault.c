@@ -76,13 +76,26 @@ int vmm_fault(vmm_fault_information_t *info) {
 
     if (r->swapped_out) {
         LOG(INFO, "swapping back in at %p\n", r->start);
-        mutex_release(sp->mut);
         int ret = pager_swapBackIn(sp, r);
+        mutex_release(sp->mut);
         return ret;
     }
 
     if (r->to_be_swapped_out) {
-        assert(false && "ts is just not mapped in but its still in memory (TODO) :thumbsup:");
+        // accessed before being swapped out but already in the queue to be
+        // swapped out. just take it out of the queue and mark it present
+        LOG(INFO, "deswap queued memory to be swapped at addr %p\n", r->start);
+        vmm_removeFromToSwapList(sp, r);
+        vmm_context_t *ctx = vmm_spaceToContext(sp);
+        for (uintptr_t addr = r->start; addr < r->end; addr += PAGE_SIZE) {
+            uint64_t new_flags = arch_mmu_read_flags(ctx->dir, addr) | MMU_FLAG_PRESENT;
+            arch_mmu_setflags(ctx->dir, addr, new_flags);
+        }
+        r->to_be_swapped_out = false; 
+
+        arch_mmu_invalidate_range(r->start, r->end);
+        mutex_release(sp->mut);
+        return VMM_FAULT_RESOLVED;
     }
 
     // Map in the page
