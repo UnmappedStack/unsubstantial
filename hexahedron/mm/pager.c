@@ -36,7 +36,8 @@ static size_t swapfile_offset_upto = 0;
  */
 void pager_swapOutRange(vmm_to_swap_range_t *range) {
     mutex_acquire(&range->range->mut);
-    if (range->space->start >= vmm_kernel_context->space->start) {
+    if (range->range->end >= vmm_kernel_context->space->start ||
+            range->space->end >= vmm_kernel_context->space->start) {
         // Kind of hacky solution, but sometimes ranges in kernel memory
         // are *magically* put into the to-swap queue despite being supposedly
         // filtered out first... FIXME
@@ -78,7 +79,8 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
         uint64_t new_flags = arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT;
         arch_mmu_setflags(context->dir, addr, new_flags);
         uintptr_t phys = arch_mmu_physical(context->dir, addr);
-        if (phys) pmm_freePage(phys);
+
+        if (phys) pmm_tryRelease(phys);
     }
     mutex_release(&range->range->mut);
 }

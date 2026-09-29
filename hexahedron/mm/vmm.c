@@ -735,15 +735,16 @@ void vmm_insertResidentRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @param range The virtual memory region to mark
  */
 void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range) {
-    LOG(DEBUG, "vmm kernel context space start is %p\n", vmm_kernel_context->space->start);
     mutex_acquire(&range->mut);
 
     // Only swap userspace memory
-    if (sp->start >= vmm_kernel_context->space->start) {
+    if (range->end >= vmm_kernel_context->space->start ||
+            sp->end >= vmm_kernel_context->space->start) {
         mutex_release(&range->mut);
         return;
     }
 
+    LOG(DEBUG, "vmm kernel context space start is %p\n", vmm_kernel_context->space->start);
     
     // A range can't be resident if its either shared or backed.
     if ((range->vmm_flags & VM_FLAG_SHARED) ||

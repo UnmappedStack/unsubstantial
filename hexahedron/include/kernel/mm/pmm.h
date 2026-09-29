@@ -170,4 +170,12 @@ uintptr_t pmm_getUsedBlocks();
  */
 uintptr_t pmm_getFreeBlocks();
 
+/**
+ * @brief Try to release a page
+ * @param page The page to release
+ * 
+ * Decrements the page refcount, but does not panic if its already 0
+ */
+void pmm_tryRelease(uintptr_t page);
+
 #endif

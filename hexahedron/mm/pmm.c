@@ -619,6 +619,32 @@ void pmm_release(uintptr_t page) {
 }
 
 /**
+ * @brief Try to release a page
+ * @param page The page to release
+ * 
+ * Decrements the page refcount, but does not panic if its already 0
+ */
+void pmm_tryRelease(uintptr_t page) {
+    // see TODO for pmm_release
+    int zone = ZONE_DEFAULT;
+    pmm_section_t *s = zones[zone];
+    
+    while (s && !(s->start + s->size > page && page >= s->start)) {
+        s = s->next;
+    }
+
+    if (!s) {
+        kernel_panic_extended(MEMORY_MANAGEMENT_ERROR, "pmm", "*** Tried to release %p but no section contains this block.", page);
+    }
+
+    size_t off = ((uintptr_t)page - (uintptr_t)s->start) / PAGE_SIZE;
+    pmm_page_t *page_to_free = &s->pages[off];
+
+    if (page_to_free->refcount == 0) page_to_free->refcount++;
+    return pmm_releasePage(page_to_free);
+}
+
+/**
  * @brief Get page
  */
 pmm_page_t *pmm_page(uintptr_t page) {
