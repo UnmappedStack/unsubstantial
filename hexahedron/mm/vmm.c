@@ -735,6 +735,7 @@ void vmm_insertResidentRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @param range The virtual memory region to mark
  */
 void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range) {
+    mutex_acquire(&range->mut);
     // Only swap userspace memory
     if (sp->start >= vmm_kernel_context->space->start) return;
     
@@ -753,4 +754,5 @@ void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range) {
     if (sp->num_resident_pages > VMM_MAX_RESIDENT_PAGES) {
         vmm_swapOutSomeMemory(sp);
     }
+    mutex_release(&range->mut);
 }

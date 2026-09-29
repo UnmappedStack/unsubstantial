@@ -35,12 +35,14 @@ static size_t swapfile_offset_upto = 0;
  * @param range The virtual memory range to swap out
  */
 void pager_swapOutRange(vmm_to_swap_range_t *range) {
+    mutex_acquire(&range->range->mut);
     uintptr_t range_bytes = range->range->end - range->range->start;
     vmm_context_t *context = vmm_spaceToContext(range->space);
     assert(context->space == range->space && "this will prolly fail idek");
     if (swapfile_offset_upto + range_bytes >= FIXED_MAX_SWAP_SIZE) {
         // Not enough swap space (later we can make this just grow)
         LOG(WARN, "Swap full\n");
+        mutex_release(&range->range->mut);
         return;
     }
 
@@ -62,7 +64,6 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     swapfile_offset_upto += range_bytes;
     vmm_unmap(buf, range_bytes);
 
-    // Remove from to-swap list
     vmm_removeFromToSwapList(range->space, range->range);
 
     // Free the physical memory (woah the whole purpose of this thing :nekocatwoah:)
@@ -72,6 +73,7 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
         uintptr_t phys = arch_mmu_physical(context->dir, addr);
         if (phys) pmm_freePage(phys);
     }
+    mutex_release(&range->range->mut);
 }
 
 /**
@@ -82,12 +84,14 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
  */
 int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
     LOG(WARN, "range -> %p, range-> is_swapped_out = %u, start = %p\n", range, range->swapped_out, range->start);
+    mutex_acquire(&range->mut);
     uintptr_t range_bytes = range->end - range->start;
     range->mmu_flags |= MMU_FLAG_PRESENT;
 
     uintptr_t new_phys = pmm_allocatePages(PAGE_ALIGN_UP(range_bytes)/PAGE_SIZE, ZONE_DEFAULT);
     if (!new_phys) {
         LOG(WARN, "failed to allocate memory to swap region back in, likely oom\n");
+        mutex_release(&range->mut);
         return VMM_FAULT_UNRESOLVED;
     }
 
@@ -104,6 +108,7 @@ int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
     arch_mmu_invalidate_range(range->start, range->end);
 
     // TODO: re-insert it into the resident page list, otherwise it can't be swapped out again
+    mutex_release(&range->mut);
     return VMM_FAULT_RESOLVED;
 }
 

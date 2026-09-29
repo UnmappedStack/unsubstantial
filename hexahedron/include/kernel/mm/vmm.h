@@ -94,6 +94,8 @@ typedef struct vmm_memory_range {
     // that is, not swapped out to disk or whatever the pager is.
     struct vmm_memory_range *next_resident;
     struct vmm_memory_range *prev_resident;
+    
+    mutex_t mut;
 } vmm_memory_range_t;
 
 typedef struct vmm_metrics_t {

@@ -209,7 +209,6 @@ vmm_memory_range_t *vmm_createRange(uintptr_t start, uintptr_t end, vmm_flags_t 
                     mutex_release(&p->mut);
 
                     vmm_memory_range_t *r = &p->ranges[i];
-                    MUTEX_INIT(&r->mut);
                     r->start = start;
                     r->end = end;
                     r->vmm_flags = vmm_flags;
