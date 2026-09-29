@@ -82,8 +82,6 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
  */
 int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
     LOG(WARN, "range -> %p, range-> is_swapped_out = %u, start = %p\n", range, range->swapped_out, range->start);
-    // For now we'll assume its fully swapped out and NOT in the to-be-swapped list
-    // TODO: these flags should be checked, not assumed with full perms!
     uintptr_t range_bytes = range->end - range->start;
     range->mmu_flags |= MMU_FLAG_PRESENT;
 
@@ -113,11 +111,6 @@ int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @brief Entry point of the pager thread
  */
 void pager_threadEntry(void) {
-    // TODO: We'll need to also have this be alerted on page fault when a non
-    // resident page is requested.
-    // TODO: We need to mark some global value when we're ready so that the VMM
-    // doesn't try swap out stuff before the pager exists (that'd be bad!)
-   
     swap_target = vmm_map(NULL, FIXED_MAX_SWAP_SIZE, VM_FLAG_ALLOC,
                                     MMU_FLAG_WRITE | MMU_FLAG_PRESENT);
 

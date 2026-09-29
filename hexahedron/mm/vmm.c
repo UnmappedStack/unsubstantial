@@ -648,7 +648,6 @@ void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @param range The virtual memory region to insert
  */
 void vmm_insertToSwapRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
-    // TODO: this should actually un-present it immediately
     if (!to_swap_cache) {
         to_swap_cache = slab_createCache("to-swap", SA_FAST, sizeof(vmm_to_swap_range_t),
                                          sizeof(vmm_to_swap_range_t), NULL, NULL);
