@@ -70,7 +70,7 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
         uint64_t new_flags = arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT;
         arch_mmu_setflags(context->dir, addr, new_flags);
         uintptr_t phys = arch_mmu_physical(context->dir, addr);
-        //if (phys) pmm_freePage(phys);
+        if (phys) pmm_freePage(phys);
     }
 }
 
