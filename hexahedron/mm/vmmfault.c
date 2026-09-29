@@ -76,8 +76,8 @@ int vmm_fault(vmm_fault_information_t *info) {
 
     if (r->swapped_out) {
         LOG(INFO, "swapping back in at %p\n", r->start);
-        int ret = pager_swapBackIn(sp, r);
         mutex_release(sp->mut);
+        int ret = pager_swapBackIn(sp, r);
         return ret;
     }
 
