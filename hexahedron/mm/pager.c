@@ -26,7 +26,7 @@
 
 // Address of memory where everything will (temporarily) be swapped out to
 // rather than disk, for testing
-#define FIXED_MAX_SWAP_SIZE (PAGE_SIZE * 20000)
+#define FIXED_MAX_SWAP_SIZE (PAGE_SIZE * 100000ULL)
 static uint8_t *swap_target;
 static size_t swapfile_offset_upto = 0;
 
@@ -36,12 +36,19 @@ static size_t swapfile_offset_upto = 0;
  */
 void pager_swapOutRange(vmm_to_swap_range_t *range) {
     mutex_acquire(&range->range->mut);
+    if (range->space->start >= vmm_kernel_context->space->start) {
+        // Kind of hacky solution, but sometimes ranges in kernel memory
+        // are *magically* put into the to-swap queue despite being supposedly
+        // filtered out first... FIXME
+        vmm_removeFromToSwapList(range->space, range->range);
+        mutex_release(&range->range->mut);
+        return;
+    }
     uintptr_t range_bytes = range->range->end - range->range->start;
     vmm_context_t *context = vmm_spaceToContext(range->space);
     assert(context->space == range->space && "this will prolly fail idek");
     if (swapfile_offset_upto + range_bytes >= FIXED_MAX_SWAP_SIZE) {
         // Not enough swap space (later we can make this just grow)
-        LOG(WARN, "Swap full\n");
         mutex_release(&range->range->mut);
         return;
     }
@@ -61,7 +68,7 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     // memory for testing, should be disk later)
     memcpy(&swap_target[swapfile_offset_upto], buf, range_bytes);
     LOG(DEBUG, "SWAP REGION %p: swap addr %p to offset in swapfile %p\n", range->range, range->range->start, swapfile_offset_upto);
-    swapfile_offset_upto += range_bytes;
+    swapfile_offset_upto += PAGE_ALIGN_UP(range_bytes);
     vmm_unmap(buf, range_bytes);
 
     vmm_removeFromToSwapList(range->space, range->range);
