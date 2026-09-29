@@ -695,11 +695,14 @@ void vmm_swapOutSomeMemory(vmm_space_t *sp) {
         vmm_insertToSwapRegion(sp, range);
         vmm_context_t *context = vmm_spaceToContext(sp);
 
-        for (size_t addr = sp->start; addr < sp->end; addr += PAGE_SIZE) {
+        range->swapped_out = true;
+        for (size_t addr = range->start; addr < range->end; addr += PAGE_SIZE) {
             arch_mmu_setflags(context->dir, addr, 
                 arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT
             );
         }
+
+        arch_mmu_invalidate_range(range->start, range->end);
     }
 }
 

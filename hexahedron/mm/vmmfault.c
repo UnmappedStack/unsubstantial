@@ -73,6 +73,10 @@ int vmm_fault(vmm_fault_information_t *info) {
         return VMM_FAULT_UNRESOLVED;
     }
 
+    if (r->swapped_out) {
+        assert(false && "ts is swapped out holy shit cool");
+    }
+
     // Map in the page
     uint32_t fl = arch_mmu_read_flags(NULL, info->address);
     if (!(fl & MMU_FLAG_PRESENT)) {
