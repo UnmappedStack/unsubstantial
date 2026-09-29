@@ -67,7 +67,7 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     // Save it to wherever its being stored (temporarily just some place in
     // memory for testing, should be disk later)
     memcpy(&swap_target[swapfile_offset_upto], buf, range_bytes);
-    LOG(DEBUG, "SWAP REGION %p: swap addr %p to offset in swapfile %p\n", range->range, range->range->start, swapfile_offset_upto);
+    LOG(DEBUG, "SWAP REGION: swap addr %p to offset in swapfile %p\n", range->range->start, swapfile_offset_upto);
     swapfile_offset_upto += PAGE_ALIGN_UP(range_bytes);
     vmm_unmap(buf, range_bytes);
 
@@ -90,7 +90,7 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
  * @returns VMM_FAULT_RESOLVED on success and VMM_FAULT_UNRESOLVED on failure
  */
 int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
-    LOG(WARN, "range -> %p, range-> is_swapped_out = %u, start = %p\n", range, range->swapped_out, range->start);
+    LOG(WARN, "range->is_swapped_out = %u, start = %p\n", range->swapped_out, range->start);
     mutex_acquire(&range->mut);
     uintptr_t range_bytes = range->end - range->start;
     range->mmu_flags |= MMU_FLAG_PRESENT;
@@ -108,8 +108,8 @@ int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
     }
 
     memcpy((void*)range->start, &swap_target[range->swap_loc_offset], range_bytes);
-    LOG(DEBUG, "deswap into %p from %p (offset %p)\n",
-            range->start, &swap_target[range->swap_loc_offset], range->swap_loc_offset);
+    LOG(DEBUG, "deswap into %p (offset %p)\n",
+            range->start, range->swap_loc_offset);
     range->to_be_swapped_out = range->swapped_out = false;
 
     arch_mmu_invalidate_range(range->start, range->end);
