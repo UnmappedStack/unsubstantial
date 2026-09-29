@@ -558,9 +558,9 @@ void vmm_destroyContext(vmm_context_t *ctx) {
 }
 
 /**
- * @brief Removes a region from the to-swap list
- * @param sp The memory space it belongs to
- * @param range The memory range to remove
+ * @brief removes a region from the to-swap list
+ * @param sp the memory space it belongs to
+ * @param range the memory range to remove
  */
 void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range) {
     // Slight optimisation: only user memory is swapped out, so no point in
@@ -605,6 +605,8 @@ remove:
     }
 
     slab_free(to_swap_cache, this_range);
+
+    range->to_be_swapped_out = false;
 }
 
 /**
@@ -644,6 +646,7 @@ void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @param range The virtual memory region to insert
  */
 void vmm_insertToSwapRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
+    // TODO: this should actually un-present it immediately
     if (!to_swap_cache) {
         to_swap_cache = slab_createCache("to-swap", SA_FAST, sizeof(vmm_to_swap_range_t),
                                          sizeof(vmm_to_swap_range_t), NULL, NULL);
@@ -665,6 +668,9 @@ void vmm_insertToSwapRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
     last->next = to_swap;
     to_swap->prev = last;
     to_swap_tail = to_swap;
+
+    range->to_be_swapped_out = true;
+    range->swapped_out = false;
 }
 
 /**
@@ -685,8 +691,15 @@ void vmm_swapOutSomeMemory(vmm_space_t *sp) {
                 PAGE_ALIGN_UP(range->end - range->start) / PAGE_SIZE,
                 range->start,
                 sp->num_resident_pages);
-        
+       
         vmm_insertToSwapRegion(sp, range);
+        vmm_context_t *context = vmm_spaceToContext(sp);
+
+        for (size_t addr = sp->start; addr < sp->end; addr += PAGE_SIZE) {
+            arch_mmu_setflags(context->dir, addr, 
+                arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT
+            );
+        }
     }
 }
 
@@ -708,6 +721,9 @@ void vmm_insertResidentRegion(vmm_space_t *sp, vmm_memory_range_t *range) {
     last->next_resident = range;
     range->prev_resident = last;
     sp->resident_last = range;
+    
+    range->to_be_swapped_out = false;
+    range->swapped_out = false;
 }
 
 /**

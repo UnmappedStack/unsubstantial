@@ -54,10 +54,10 @@
 
 #define MUST_BE_AT_OFFSET(type, stmt, offset) STATIC_ASSERT(__builtin_offsetof(type, stmt) == offset)
 
-#define HEXDUMP(ptr, size)                                                      \
+#define HEXDUMP(ptr, size)                                                       \
     do {                                                                         \
-        const unsigned char *data = (const unsigned char *)(ptr);               \
-        size_t length = (size_t)(size);                                         \
+        const unsigned char *data = (const unsigned char *)(ptr);                \
+        size_t length = (size_t)(size);                                          \
         for (size_t i = 0; i < length; i += 16) {                                \
             char hex[16 * 3 + 1] = {0};                                          \
             char ascii[17] = {0};                                                \
@@ -66,7 +66,7 @@
                 sprintf(&hex[j * 3], "%02X ", byte);                             \
                 ascii[j] = isprint(byte) ? byte : '.';                           \
             }                                                                    \
-            dprintf(DEBUG, "%08zx  %-48s  |%s\n", i, hex, ascii);                     \
+            dprintf(DEBUG, "%08zx  %-48s  |%s\n", i, hex, ascii);                \
         }                                                                        \
     } while (0)
 

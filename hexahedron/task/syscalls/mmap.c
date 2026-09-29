@@ -62,7 +62,7 @@ long sys_mmap(sys_mmap_context_t *context) {
     vmm_flags_t vm_flags =  ((flags & MAP_FIXED) ? VM_FLAG_REPLACE : 0) |
                             ((file) ? VM_FLAG_FILE : 0) |
                             ((flags & MAP_SHARED) ? VM_FLAG_SHARED : 0) |
-                            VM_FLAG_ALLOC;
+                            VM_FLAG_ALLOC | ((!file) ? VM_FLAG_FAKE_ME_NOT : 0);
     
     void *r;
     if (file) {

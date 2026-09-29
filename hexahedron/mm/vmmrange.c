@@ -32,6 +32,15 @@ const int _vmm_entries_per_page = (PAGE_SIZE - sizeof(vmm_range_page_t)) / sizeo
 static vmm_range_page_t *vmm_ranges_head = NULL;
 
 /**
+ * @brief Converts a VMM space to a context
+ * @param space The space to convert
+ * @returns The context that the space belongs to
+ */
+vmm_context_t *vmm_spaceToContext(vmm_space_t *space) {
+    return (vmm_context_t*) ((uintptr_t)space - sizeof(vmm_context_t));
+}
+
+/**
  * @brief Find a free spot in a VMM context
  * @param space The space to search
  * @param address Address hint. If NULL, ignored.

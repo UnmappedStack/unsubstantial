@@ -85,6 +85,9 @@ typedef struct vmm_memory_range {
     vmm_flags_t vmm_flags;
     mmu_flags_t mmu_flags;
     vmm_file_t file;
+    bool to_be_swapped_out;
+    uintptr_t swap_loc_offset; // offset in the swap media it's stored at
+    bool swapped_out;
     
     // It's also stored in a separate linked list of resident regions.
     // We will only even be in this list for the space if we are actively resident,
@@ -351,4 +354,18 @@ void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range);
  * @param range The memory region
  */
 void vmm_removeFromResidentList(vmm_space_t *sp, vmm_memory_range_t *range);
+
+/**
+ * @brief removes a region from the to-swap list
+ * @param sp the memory space it belongs to
+ * @param range the memory range to remove
+ */
+void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range);
+
+/**
+ * @brief Converts a VMM space to a context
+ * @param space The space to convert
+ * @returns The context that the space belongs to
+ */
+vmm_context_t *vmm_spaceToContext(vmm_space_t *space);
 #endif
