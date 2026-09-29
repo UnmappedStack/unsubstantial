@@ -546,7 +546,9 @@ void vmm_destroyContext(vmm_context_t *ctx) {
     vmm_memory_range_t *r = ctx->space->range;
     while (r) {
         vmm_memory_range_t *next = r->next;
-        vmm_destroyRange(ctx->space, r);
+        if (!r->swapped_out) {
+            vmm_destroyRange(ctx->space, r);
+        }
         r = next;
     }
 

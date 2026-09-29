@@ -18,3 +18,11 @@
  * @brief Entry point of the pager thread
  */
 void pager_threadEntry(void);
+
+/**
+ * @brief Swap back in a range from disk
+ * @param sp The space range is within
+ * @param range The range to swap in
+ * @returns VMM_FAULT_RESOLVED on success and VMM_FAULT_UNRESOLVED on failure
+ */
+int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range);

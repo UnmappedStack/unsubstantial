@@ -77,6 +77,29 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
 }
 
 /**
+ * @brief Swap back in a range from disk
+ * @param sp The space range is within
+ * @param range The range to swap in
+ * @returns VMM_FAULT_RESOLVED on success and VMM_FAULT_UNRESOLVED on failure
+ */
+int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
+    // For now we'll assume its fully swapped out and NOT in the to-be-swapped list
+    // TODO: these flags should be checked, not assumed with full perms!
+    uintptr_t range_bytes = range->end - range->start;
+    range->mmu_flags |= MMU_FLAG_PRESENT;
+
+    uint8_t *new_mem = vmm_map((void*)range->start, range_bytes, VM_FLAG_ALLOC, range->mmu_flags);
+
+    if (!new_mem) return VMM_FAULT_UNRESOLVED; // probably oom
+
+    memcpy(new_mem, &swap_target[range->swap_loc_offset], range_bytes);
+    range->to_be_swapped_out = range->swapped_out = false;
+
+    // TODO: re-insert it into the resident page list, otherwise it can't be swapped out again
+    return VMM_FAULT_RESOLVED;
+}
+
+/**
  * @brief Entry point of the pager thread
  */
 void pager_threadEntry(void) {

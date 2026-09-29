@@ -12,6 +12,7 @@
  */
 
 #include <kernel/mm/vmm.h>
+#include <kernel/mm/pager.h>
 #include <kernel/processor_data.h>
 #include <kernel/task/process.h>
 #include <kernel/debug.h>
@@ -74,7 +75,14 @@ int vmm_fault(vmm_fault_information_t *info) {
     }
 
     if (r->swapped_out) {
-        assert(false && "ts is swapped out holy shit cool");
+        LOG(INFO, "swapping back in at %p\n", r->start);
+        mutex_release(sp->mut);
+        int ret = pager_swapBackIn(sp, r);
+        return ret;
+    }
+
+    if (r->to_be_swapped_out) {
+        assert(false && "ts is just not mapped in but its still in memory (TODO) :thumbsup:");
     }
 
     // Map in the page
