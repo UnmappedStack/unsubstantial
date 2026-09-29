@@ -140,6 +140,9 @@ void vmm_insertRange(vmm_space_t *space, vmm_memory_range_t *range) {
     range->next = NULL;
     range->prev = r;
 
+    range->next_resident = range->prev_resident = NULL;
+    range->swapped_out = range->to_be_swapped_out = false;
+    range->swap_loc_offset = 0;
     vmm_markRegionResident(space, range);
 }
 
