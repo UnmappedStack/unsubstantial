@@ -29,5 +29,8 @@ mv $ISO_OUTPUT_DIRECTORY/iso/boot/grub/themes/ethereal/*.pf2 $ISO_OUTPUT_DIRECTO
 # Pack it into an ISO
 grub-mkrescue -o $ISO_OUTPUT_DIRECTORY/hexahedron.iso $ISO_OUTPUT_DIRECTORY/iso --themes=starfield
 
+# Create a swap disk
+dd if=/dev/zero of=$ISO_OUTPUT_DIRECTORY/swapdisk.img bs=512 count=800000
+
 # Remove the old directory
 rm -r $ISO_OUTPUT_DIRECTORY/iso/

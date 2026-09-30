@@ -64,4 +64,5 @@ headerlog:
 
 qemu:
 	$(MAKE) headerlog header="Launching QEMU..."
-	qemu-system-x86_64 -cdrom build-output/hexahedron.iso -accel kvm -m 1G -smp 8 -serial stdio
+	qemu-system-x86_64 -cdrom build-output/hexahedron.iso -accel kvm -m 1G -smp 8 -serial stdio \
+		-drive file=build-output/swapdisk.img,id=drv,if=none -device ahci,id=ahci -device ide-hd,drive=drv,bus=ahci.0

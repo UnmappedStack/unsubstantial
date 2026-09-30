@@ -350,7 +350,7 @@ void kmain() {
 
     // Start the pager thread
     process_t *pager;
-    if (!(pager=process_createKernel("Pager", PROCESS_KERNEL, (void*)pager_threadEntry, NULL)))
+    if (!(pager=process_createKernel("pager", PROCESS_KERNEL, (void*)pager_threadEntry, NULL)))
         LOG(WARN, "Pager thread could not be initialised, will run without page swapping.\n");
     sched_insert(pager->main_thread);
 

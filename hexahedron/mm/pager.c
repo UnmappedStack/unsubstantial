@@ -24,11 +24,29 @@
 
 #define HERE(x) LOG(DEBUG, "HERE: %u", x)
 
-// Address of memory where everything will (temporarily) be swapped out to
-// rather than disk, for testing
+// This is hardcoded, the second the partition is smaller than expected it will break...
+// FIXME
 #define FIXED_MAX_SWAP_SIZE (PAGE_SIZE * 100000ULL)
-static uint8_t *swap_target;
 static size_t swapfile_offset_upto = 0;
+vfs_file_t *backing = NULL;
+
+/**
+ * @brief Write some memory to the swap disk
+ * @param range The batched pages to write
+ */
+void pager_writeToDisk(page_range_t *range) {
+    assert(backing);
+    backing->inode->c_ops->write_range(backing->inode, range);
+}
+
+/**
+ * @brief Read some memory from the swap disk into a buffer
+ * @param range The range to read into
+ */
+void pager_readFromDisk(page_range_t *range) {
+    assert(backing);
+    backing->inode->c_ops->read_range(backing->inode, range);
+}
 
 /**
  * @brief Swap out a single range to the disk
@@ -36,18 +54,18 @@ static size_t swapfile_offset_upto = 0;
  */
 void pager_swapOutRange(vmm_to_swap_range_t *range) {
     mutex_acquire(&range->range->mut);
-    if (range->range->end >= vmm_kernel_context->space->start ||
-            range->space->end >= vmm_kernel_context->space->start) {
-        // Kind of hacky solution, but sometimes ranges in kernel memory
-        // are *magically* put into the to-swap queue despite being supposedly
-        // filtered out first... FIXME
-        vmm_removeFromToSwapList(range->space, range->range);
-        mutex_release(&range->range->mut);
-        return;
+    if (!backing) {
+        // swap disk isn't yet initialised, so try that first
+        if (vfs_open("/device/sata0", O_RDWR, &backing)) {
+            // still not initialised
+            backing = NULL;
+            mutex_release(&range->range->mut);
+            return;
+        }
     }
+
     uintptr_t range_bytes = range->range->end - range->range->start;
     vmm_context_t *context = vmm_spaceToContext(range->space);
-    assert(context->space == range->space && "this will prolly fail idek");
     if (swapfile_offset_upto + range_bytes >= FIXED_MAX_SWAP_SIZE) {
         // Not enough swap space (later we can make this just grow)
         mutex_release(&range->range->mut);
@@ -55,34 +73,41 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     }
 
     // Copy the range to a buffer we can access from this memory space
-    uint8_t *buf = vmm_map(NULL, range_bytes, VM_FLAG_ALLOC, MMU_FLAG_WRITE | MMU_FLAG_PRESENT);
+    page_range_t *buf = vmm_map(NULL, range_bytes + sizeof(page_range_t), VM_FLAG_ALLOC, MMU_FLAG_WRITE | MMU_FLAG_PRESENT);
+    assert(buf);
+    buf->offset = 0;
+    buf->npages = range_bytes / PAGE_SIZE;
     for (uintptr_t addr = range->range->start; addr < range->range->end; addr += PAGE_SIZE) {
         void *src = (void*) arch_mmu_remap_physical(arch_mmu_physical(context->dir, addr), PAGE_SIZE, REMAP_TEMPORARY);
-        memcpy(&buf[addr - range->range->start], src, PAGE_SIZE);
+        memcpy(&((uint8_t*)buf->pages)[addr - range->range->start], src, PAGE_SIZE);
     }
     
     // Save in the region the offset on the disk its stored at
     range->range->swap_loc_offset = swapfile_offset_upto;
     range->range->swapped_out = true;
+    range->range->to_be_swapped_out = false;
 
-    // Save it to wherever its being stored (temporarily just some place in
-    // memory for testing, should be disk later)
-    memcpy(&swap_target[swapfile_offset_upto], buf, range_bytes);
-    LOG(DEBUG, "SWAP REGION: swap addr %p to offset in swapfile %p\n", range->range->start, swapfile_offset_upto);
+    // Save it to wherever its being stored
+    pager_writeToDisk(buf);
     swapfile_offset_upto += PAGE_ALIGN_UP(range_bytes);
-    vmm_unmap(buf, range_bytes);
+    vmm_unmap(buf, range_bytes + sizeof(page_range_t));
 
     vmm_removeFromToSwapList(range->space, range->range);
+    mutex_release(&range->range->mut);
 
     // Free the physical memory (woah the whole purpose of this thing :nekocatwoah:)
     for (uintptr_t addr = range->range->start; addr < range->range->end; addr += PAGE_SIZE) {
-        uint64_t new_flags = arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT;
-        arch_mmu_setflags(context->dir, addr, new_flags);
-        uintptr_t phys = arch_mmu_physical(context->dir, addr);
-
-        if (phys) pmm_tryRelease(phys);
+        if (range->range->vmm_flags & VM_FLAG_ALLOC) {
+            uintptr_t pg = arch_mmu_physical(NULL, addr);
+            range->space->metrics.anon_resident -= PAGE_SIZE;
+            if (pg) {
+                range->space->metrics.anon_resident -= PAGE_SIZE;
+                pmm_freePage(pg);
+            }
+        }
+        arch_mmu_unmap(NULL, addr);
     }
-    mutex_release(&range->range->mut);
+    arch_mmu_invalidate_range(range->range->start, range->range->end);
 }
 
 /**
@@ -109,12 +134,22 @@ int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
         arch_mmu_map(ctx->dir, range->start + offset, new_phys + offset, range->mmu_flags);
     }
 
-    memcpy((void*)range->start, &swap_target[range->swap_loc_offset], range_bytes);
+    // Sadly we need an intermediate buffer :( TODO: sassydallas please make your vfs nice so its possible
+    // to copy into a buffer where the page_range_t doesn't have to be immediately before in memory
+    page_range_t *buf = vmm_map(NULL, range_bytes + sizeof(page_range_t), VM_FLAG_ALLOC, MMU_FLAG_WRITE | MMU_FLAG_PRESENT);
+    buf->offset = 0;
+    buf->npages = range_bytes / PAGE_SIZE;
+    pager_readFromDisk(buf);
+    memcpy((void*)range->start, buf->pages, range_bytes);
+    vmm_unmap(buf, range_bytes + sizeof(page_range_t));
+
     LOG(DEBUG, "deswap into %p (offset %p)\n",
             range->start, range->swap_loc_offset);
     range->to_be_swapped_out = range->swapped_out = false;
 
     arch_mmu_invalidate_range(range->start, range->end);
+
+    range->swapped_out = false;
 
     // TODO: re-insert it into the resident page list, otherwise it can't be swapped out again
     mutex_release(&range->mut);
@@ -125,15 +160,12 @@ int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
  * @brief Entry point of the pager thread
  */
 void pager_threadEntry(void) {
-    swap_target = vmm_map(NULL, FIXED_MAX_SWAP_SIZE, VM_FLAG_ALLOC,
-                                    MMU_FLAG_WRITE | MMU_FLAG_PRESENT);
-
     for (;;) {
         process_yield(1);
 
         // Keep checking the to-swap region list and, well... swap it out
         vmm_to_swap_range_t *range = to_swap_head;
-        if (!range) continue; // Maybe this should yield?
+        if (!range) continue;
 
         // We have something to swap out
         pager_swapOutRange(range);

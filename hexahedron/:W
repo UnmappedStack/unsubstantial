@@ -74,17 +74,17 @@ int vmm_fault(vmm_fault_information_t *info) {
         return VMM_FAULT_UNRESOLVED;
     }
 
-    if (r->swapped_out && r->end < vmm_kernel_context->space->start) {
+    if (r->swapped_out) {
         LOG(INFO, "swapping back in at %p\n", r->start);
-        int ret = pager_swapBackIn(sp, r);
         mutex_release(sp->mut);
+        int ret = pager_swapBackIn(sp, r);
         return ret;
     }
 
-    if (r->to_be_swapped_out && r->end < vmm_kernel_context->space->start) {
+    if (r->to_be_swapped_out) {
+        assert(range->end >= vmm_kernel_context->space->start && "tried swapping in kernel memory!");
         // accessed before being swapped out but already in the queue to be
         // swapped out. just take it out of the queue and mark it present
-        mutex_acquire(&r->mut);
         LOG(INFO, "deswap queued memory to be swapped at addr %p\n", r->start);
         vmm_removeFromToSwapList(sp, r);
         vmm_context_t *ctx = vmm_spaceToContext(sp);
@@ -95,7 +95,6 @@ int vmm_fault(vmm_fault_information_t *info) {
         r->to_be_swapped_out = false; 
 
         arch_mmu_invalidate_range(r->start, r->end);
-        mutex_release(&r->mut);
         mutex_release(sp->mut);
         return VMM_FAULT_RESOLVED;
     }

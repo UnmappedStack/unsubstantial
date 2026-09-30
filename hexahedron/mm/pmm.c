@@ -634,7 +634,7 @@ void pmm_tryRelease(uintptr_t page) {
     }
 
     if (!s) {
-        kernel_panic_extended(MEMORY_MANAGEMENT_ERROR, "pmm", "*** Tried to release %p but no section contains this block.", page);
+        return;
     }
 
     size_t off = ((uintptr_t)page - (uintptr_t)s->start) / PAGE_SIZE;

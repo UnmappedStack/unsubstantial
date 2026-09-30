@@ -567,7 +567,7 @@ void vmm_destroyContext(vmm_context_t *ctx) {
 void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range) {
     // Slight optimisation: only user memory is swapped out, so no point in
     // searching if its in kernel memory
-    if (range->start >= vmm_kernel_context->space->start) return;
+    if (!range->to_be_swapped_out || range->end >= vmm_kernel_context->space->start) return;
 
     if (to_swap_tail)
         to_swap_tail->next = NULL;
@@ -588,7 +588,6 @@ void vmm_removeFromToSwapList(vmm_space_t *sp, vmm_memory_range_t *range) {
         goto remove;
     }
 
-    // Not in the list. We don't need to panic or return an error, this is normal.
     return;
 
 remove:
@@ -696,7 +695,7 @@ void vmm_swapOutSomeMemory(vmm_space_t *sp) {
         vmm_insertToSwapRegion(sp, range);
         vmm_context_t *context = vmm_spaceToContext(sp);
 
-        for (size_t addr = range->start; addr < range->end; addr += PAGE_SIZE) {
+        for (uintptr_t addr = range->start; addr < range->end; addr += PAGE_SIZE) {
             arch_mmu_setflags(context->dir, addr, 
                 arch_mmu_read_flags(context->dir, addr) & ~MMU_FLAG_PRESENT
             );
@@ -744,8 +743,6 @@ void vmm_markRegionResident(vmm_space_t *sp, vmm_memory_range_t *range) {
         return;
     }
 
-    LOG(DEBUG, "vmm kernel context space start is %p\n", vmm_kernel_context->space->start);
-    
     // A range can't be resident if its either shared or backed.
     if ((range->vmm_flags & VM_FLAG_SHARED) ||
             (range->vmm_flags & VM_FLAG_FILE) ||
