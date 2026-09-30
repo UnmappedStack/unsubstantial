@@ -30,6 +30,10 @@
 static size_t swapfile_offset_upto = 0;
 vfs_file_t *backing = NULL;
 
+/* for some stats in /system/mem/pmm */
+uintptr_t swap_space_used = 0;
+uintptr_t swap_gaps = 0;
+
 /**
  * @brief Write some memory to the swap disk
  * @param range The batched pages to write
@@ -93,6 +97,8 @@ void pager_swapOutRange(vmm_to_swap_range_t *range) {
     vmm_unmap(buf, range_bytes + sizeof(page_range_t));
 
     vmm_removeFromToSwapList(range->space, range->range);
+
+    swap_space_used += range_bytes;
     mutex_release(&range->range->mut);
 
     // Free the physical memory (woah the whole purpose of this thing :nekocatwoah:)
@@ -150,6 +156,7 @@ int pager_swapBackIn(vmm_space_t *sp, vmm_memory_range_t *range) {
     arch_mmu_invalidate_range(range->start, range->end);
 
     range->swapped_out = false;
+    swap_gaps += range_bytes;
 
     // TODO: re-insert it into the resident page list, otherwise it can't be swapped out again
     mutex_release(&range->mut);

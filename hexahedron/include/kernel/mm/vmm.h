@@ -63,8 +63,11 @@
 #define VMM_PTR_STRICT              0x02    // Strict pointer validation
 
 // This might be worth playing around with to find an optimal value. This value
-// is uhh... how do I put it... pulled straight outta my ass
-#define VMM_MAX_RESIDENT_PAGES 2000
+// is uhh... how do I put it... pulled straight outta my ass.
+// Lower value  -> saves memory but slower
+// Higher value -> more memory heavy but faster
+// Maybe make this a configurable value?
+#define VMM_MAX_RESIDENT_PAGES 1000
 
 /**** TYPES ****/
 
@@ -148,6 +151,8 @@ typedef struct vmm_fault_information {
 extern vmm_context_t *vmm_kernel_context;
 extern vmm_space_t *vmm_kernel_space;
 extern vmm_to_swap_range_t *to_swap_head;
+extern uintptr_t swap_space_used;
+extern uintptr_t swap_gaps;
 
 /**** FUNCTIONS ****/
 

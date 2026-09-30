@@ -195,14 +195,17 @@ void print_memory(int *i_ptr) {
         return;
     }
 
-    unsigned long long total_memory, used_memory;
+    unsigned long long total_memory, used_memory, swap_used, swap_gaps;
 
     fscanf(kmem,    
         "TotalPhysBlocks:%*d\n"
         "TotalPhysMemory:%zu kB\n"
         "UsedPhysMemory:%zu kB\n"
         "FreePhysMemory:%*zu kB\n"
-        "PhysMemoryBytes:%*zu\n", &total_memory, &used_memory);
+        "PhysMemoryBytes:%*zu\n"
+        "SwapSpaceUsed:%zu kB\n"
+        "SwapSpaceGaps:%zu kB",
+        &total_memory, &used_memory, &swap_used, &swap_gaps);
     fclose(kmem);
 
 
@@ -211,8 +214,12 @@ void print_memory(int *i_ptr) {
 
 	char used[64];
 	char tot[64];
+    char uswap[64];
+    char gswap[64];
 	memory_print_pretty(used, used_memory);
 	memory_print_pretty(tot, total_memory);
+	memory_print_pretty(uswap, swap_used);
+	memory_print_pretty(gswap, swap_gaps);
 	
 	int pct = (int)(((double)used_memory / (double)total_memory) * 100.0);
 
@@ -227,6 +234,8 @@ void print_memory(int *i_ptr) {
 	int i = *i_ptr;
 	char tmp[128];
 	INFO_PUSH_LINE("Memory: " COLOR_OFF "%s / %s (%s%d%%" COLOR_OFF ")\n", used, tot, color, pct);
+    INFO_PUSH_LINE("Swap: " COLOR_OFF "%s used (%s gaps in swap)\n", uswap, gswap);
+             
 	*i_ptr = i;
 #endif
 }

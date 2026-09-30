@@ -545,8 +545,8 @@ static int __systemfs_xvasprintf(void *user, char c) {
     systemfs_node_t *n = (systemfs_node_t*)user;
     
     if (n->buf.bufidx >= n->buf.bufsize) {
-        n->buf.buffer = krealloc(n->buf.buffer, n->buf.bufsize + 128);
-        n->buf.bufsize += 128;
+        n->buf.buffer = krealloc(n->buf.buffer, n->buf.bufsize + 256);
+        n->buf.bufsize += 256;
     }
     
     n->buf.buffer[n->buf.bufidx++] = c;
@@ -561,7 +561,7 @@ static int __systemfs_xvasprintf(void *user, char c) {
  * @param fmt Format
  */
 ssize_t systemfs_printf(systemfs_node_t *node, char *fmt, ...) {
-    if (!node->buf.bufsize || !node->buf.buffer) { node->buf.buffer = kmalloc(128); node->buf.bufsize = 128; }
+    if (!node->buf.bufsize || !node->buf.buffer) { node->buf.buffer = kmalloc(256); node->buf.bufsize = 256; }
     
     va_list ap;
     va_start(ap, fmt);
